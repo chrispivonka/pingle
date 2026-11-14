@@ -37,11 +37,19 @@ h1 span{color:var(--signal)}
 .pip{width:12px;height:12px;border-radius:50%;border:2px solid var(--line)}
 .pip.used{background:var(--signal);border-color:var(--signal)}
 .pip.hit{background:var(--found);border-color:var(--found)}
-.lede{margin:0;font-size:15px;color:var(--muted);max-width:60ch}
+.modes{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;width:fit-content;max-width:100%}
+.modes a{font-weight:600;font-size:14px;padding:7px 14px;border-radius:7px;color:var(--muted);text-decoration:none}
+.modes a[aria-current="page"]{background:var(--ink);color:var(--panel)}
+.modes a:focus-visible{outline:3px solid var(--signal);outline-offset:1px}
+.lede{margin:0;font-size:15px;color:var(--muted);max-width:62ch}
 .lede b{color:var(--ink)}
 .mapbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;position:relative}
-.scroller{overflow-x:auto;border-radius:8px}
-canvas{display:block;width:max(100%,760px);height:auto;touch-action:manipulation;cursor:crosshair;border-radius:8px}
+.view{position:relative;border-radius:8px;overflow:hidden}
+canvas{display:block;width:100%;touch-action:none;cursor:crosshair;border-radius:8px}
+canvas.dragging{cursor:grabbing}
+.zoom{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px}
+.zoom button{font:600 18px/1 var(--body);width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;opacity:.92}
+.zoom button:focus-visible{outline:3px solid var(--signal);outline-offset:1px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);padding:8px 4px 0}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
@@ -60,12 +68,22 @@ input[type=search]:focus{outline:none;border-color:var(--signal)}
 .choices{display:flex;flex-direction:column;gap:6px}
 .choice{font:inherit;display:flex;justify-content:space-between;gap:10px;text-align:left;padding:11px 14px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
 .choice:hover{border-color:var(--signal)}
+.choice.fits{border-color:var(--signal)}
 .choice:focus-visible,.btn:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
 .choice small{color:var(--muted);font-family:var(--mono);font-size:12px;flex:none}
 .hint{font-size:13px;color:var(--muted);margin:0}
 .btn{font:inherit;font-weight:600;padding:12px 16px;border-radius:10px;border:0;background:var(--ink);color:var(--panel);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>.btn{flex:1 1 150px}
 .result{font-family:var(--display);font-weight:700;font-size:26px;line-height:1.2;margin:0}
 .share{font-family:var(--mono);font-size:13px;white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:12px;margin:0}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;text-align:center}
+.stats b{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums}
+.stats span{font-size:12px;color:var(--muted)}
+.dist{display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:12px}
+.dist div{display:grid;grid-template-columns:14px minmax(0,1fr);gap:8px;align-items:center}
+.dist i{display:block;height:16px;border-radius:4px;background:var(--line);min-width:22px;text-align:right;padding-right:6px;font-style:normal;line-height:16px;color:var(--ink)}
+.dist i.now{background:var(--found);color:var(--panel)}
 .how{font-size:14px;color:var(--muted)}
 .how summary{cursor:pointer;font-weight:600;color:var(--ink)}
 .how p{margin:8px 0 0;max-width:68ch}
@@ -82,13 +100,26 @@ input[type=search]:focus{outline:none;border-color:var(--signal)}
       <div class="pips" id="pips"></div>
     </div>
   </header>
-  <p class="lede">A server is hiding somewhere on Earth. <b>Tap the map and ping it from a city.</b> On a phone, swipe the map sideways. Each reply tells you how far the signal could have traveled, and the glowing bands narrow down where it lives. Ping from the server's own city to win.</p>
+  <nav class="modes" aria-label="Game mode">
+    <a href="#daily" data-mode="daily">Daily</a>
+    <a href="#hard" data-mode="hard">Hard</a>
+    <a href="#practice" data-mode="practice">Practice</a>
+  </nav>
+  <p class="lede" id="lede"></p>
   <div class="mapbox">
-    <div class="scroller" id="scroller"><canvas id="map" width="900" height="420" aria-label="World map showing where the server could be"></canvas></div>
+    <div class="view">
+      <canvas id="map" aria-label="World map showing where the server could be"></canvas>
+      <div class="zoom">
+        <button type="button" id="zin" aria-label="Zoom in">+</button>
+        <button type="button" id="zout" aria-label="Zoom out">−</button>
+        <button type="button" id="zfit" aria-label="Show the whole map">⤢</button>
+      </div>
+    </div>
     <div class="legend">
       <span><i style="background:var(--signal);opacity:.35"></i>Inside one ping band</span>
       <span><i style="background:var(--signal)"></i>Inside every band</span>
       <span><i style="border:2px solid var(--city)"></i>City you can ping from</span>
+      <span>Drag to pan · pinch or +/− to zoom</span>
     </div>
   </div>
   <div class="grid">
@@ -101,7 +132,8 @@ input[type=search]:focus{outline:none;border-color:var(--signal)}
   <details class="how">
     <summary>How the clues work</summary>
     <p>Light in fiber-optic cable covers about 200 km per millisecond, and a ping has to go there and back. So a 40 ms reply means the server is at most about 4,000 km away. Real cables don't run in straight lines, so the true distance is usually about 60–80% of that limit, which is the band you see on the map.</p>
-    <p>This prototype simulates each reply from the real distance between cities with realistic routing detours. The full version will use real measurements from volunteer probes around the world.</p>
+    <p><b>Daily</b> hides the server in one of 66 big internet hubs. <b>Hard</b> hides it in a smaller city and lets you ping from about 160. <b>Practice</b> gives you a fresh random server every round and doesn't count toward your stats.</p>
+    <p>Reply times are simulated from the real distance between cities, with a fixed routing detour for each pair so the same route always gives the same answer.</p>
   </details>
 </div>
 
@@ -137,8 +169,9 @@ const LAND = [
  [[172.5,-40.5],[174,-41.8],[171,-44.5],[168,-46.6],[166.5,-45.8],[168.5,-43.5]],
 ];
 
-/* ---------- cities you can ping from ---------- */
-const CITIES = [
+/* ---------- cities ---------- */
+// Hubs: big internet exchange cities. Daily servers hide here.
+const HUB_DATA = [
  ["Ashburn",39.04,-77.49],["New York",40.71,-74.01],["Chicago",41.88,-87.63],["Atlanta",33.75,-84.39],["Miami",25.76,-80.19],
  ["Dallas",32.78,-96.80],["Denver",39.74,-104.99],["Phoenix",33.45,-112.07],["Los Angeles",34.05,-118.24],["San Jose",37.34,-121.89],
  ["Seattle",47.61,-122.33],["Toronto",43.65,-79.38],["Montreal",45.50,-73.57],["Vancouver",49.28,-123.12],["Mexico City",19.43,-99.13],
@@ -153,7 +186,31 @@ const CITIES = [
  ["Osaka",34.69,135.50],["Sydney",-33.87,151.21],["Melbourne",-37.81,144.96],["Perth",-31.95,115.86],["Auckland",-36.85,174.76],
  ["Johannesburg",-26.20,28.05],["Cape Town",-33.92,18.42],["Lagos",6.52,3.38],["Nairobi",-1.29,36.82],["Casablanca",33.57,-7.59],
  ["Moscow",55.76,37.62]
-].map(([name,lat,lon],i)=>({i,name,lat,lon}));
+];
+// Smaller cities: Hard mode servers hide here, and you can ping from them too.
+const MORE_DATA = [
+ ["Salt Lake City",40.76,-111.89],["Minneapolis",44.98,-93.27],["Kansas City",39.10,-94.58],["Houston",29.76,-95.37],["Boston",42.36,-71.06],
+ ["Portland",45.52,-122.68],["Las Vegas",36.17,-115.14],["Nashville",36.16,-86.78],["Calgary",51.05,-114.07],["Winnipeg",49.90,-97.14],
+ ["Halifax",44.65,-63.57],["Yellowknife",62.45,-114.37],["Juneau",58.30,-134.42],["Monterrey",25.69,-100.32],["Havana",23.11,-82.37],
+ ["Guatemala City",14.63,-90.51],["Panama City",8.98,-79.52],["Medellín",6.24,-75.58],["Caracas",10.48,-66.90],["Quito",-0.18,-78.47],
+ ["La Paz",-16.50,-68.15],["Manaus",-3.12,-60.02],["Recife",-8.05,-34.88],["Asunción",-25.26,-57.58],["Montevideo",-34.90,-56.16],
+ ["Punta Arenas",-53.16,-70.91],["Edinburgh",55.95,-3.19],["Barcelona",41.39,2.17],["Marseille",43.30,5.37],["Rome",41.90,12.50],
+ ["Munich",48.14,11.58],["Berlin",52.52,13.40],["Prague",50.08,14.44],["Copenhagen",55.68,12.57],["Budapest",47.50,19.04],
+ ["Belgrade",44.79,20.45],["Bucharest",44.43,26.10],["Kyiv",50.45,30.52],["Riga",56.95,24.11],["Saint Petersburg",59.93,30.36],
+ ["Tromsø",69.65,18.96],["Algiers",36.75,3.06],["Tunis",36.81,10.18],["Dakar",14.72,-17.47],["Abidjan",5.36,-4.01],
+ ["Accra",5.60,-0.19],["Kinshasa",-4.44,15.27],["Luanda",-8.84,13.23],["Windhoek",-22.56,17.08],["Durban",-29.86,31.02],
+ ["Lusaka",-15.39,28.32],["Dar es Salaam",-6.79,39.21],["Kampala",0.35,32.58],["Addis Ababa",9.03,38.74],["Khartoum",15.50,32.56],
+ ["Antananarivo",-18.88,47.51],["Amman",31.95,35.93],["Baghdad",33.31,44.36],["Tehran",35.69,51.39],["Baku",40.41,49.87],
+ ["Doha",25.29,51.53],["Muscat",23.59,58.41],["Karachi",24.86,67.01],["Lahore",31.55,74.34],["Tashkent",41.30,69.24],
+ ["Almaty",43.24,76.89],["Bengaluru",12.97,77.59],["Colombo",6.93,79.86],["Kolkata",22.57,88.36],["Kathmandu",27.72,85.32],
+ ["Dhaka",23.81,90.41],["Novosibirsk",55.01,82.93],["Ulaanbaatar",47.89,106.91],["Kuala Lumpur",3.14,101.69],["Ho Chi Minh City",10.82,106.63],
+ ["Hanoi",21.03,105.85],["Chengdu",30.57,104.07],["Beijing",39.90,116.41],["Shanghai",31.23,121.47],["Busan",35.18,129.08],
+ ["Vladivostok",43.12,131.89],["Yakutsk",62.03,129.73],["Sapporo",43.06,141.35],["Cebu",10.32,123.89],["Guam",13.44,144.79],
+ ["Port Moresby",-9.44,147.18],["Darwin",-12.46,130.84],["Brisbane",-27.47,153.03],["Adelaide",-34.93,138.60],["Hobart",-42.88,147.33],
+ ["Wellington",-41.29,174.78],["Christchurch",-43.53,172.64],["Nouméa",-22.28,166.46],["Suva",-18.14,178.44],["Papeete",-17.53,-149.57]
+];
+const CITIES = [...HUB_DATA.map(d=>[...d,true]), ...MORE_DATA.map(d=>[...d,false])].map(([name,lat,lon,hub],i)=>({i,name,lat,lon,hub}));
+const HUBS = CITIES.filter(c=>c.hub), MORE = CITIES.filter(c=>!c.hub);
 
 /* ---------- geometry & physics ---------- */
 const R = 6371, rad = d => d*Math.PI/180;
@@ -162,7 +219,7 @@ function dist(a,b){ const dLat=rad(b.lat-a.lat), dLon=rad(b.lon-a.lon);
 function hash(s){ let h=2166136261; for(const c of s){ h^=c.charCodeAt(0); h=Math.imul(h,16777619);} return (h>>>0)/4294967296; }
 const FIBER = 200;          // km per ms, one way
 const OVERHEAD = 1.5;       // ms of switching and processing
-const DETOUR = [1.25, 1.6];// how much longer real cable routes are than the great circle
+const DETOUR = [1.25, 1.6]; // how much longer real cable routes are than the great circle
 function rtt(from,to){
   if (from.i===to.i) return 0.4;
   const d = dist(from,to);
@@ -174,76 +231,165 @@ function band(ms){ // true distance window implied by a reply
   return {limit, lo: limit/DETOUR[1], hi: limit/DETOUR[0]};
 }
 
-/* ---------- daily puzzle ---------- */
+/* ---------- puzzles ---------- */
 const EPOCH = Date.UTC(2026,10,14);
 const n = new Date();
 const DAY = Math.floor((Date.UTC(n.getUTCFullYear(),n.getUTCMonth(),n.getUTCDate())-EPOCH)/864e5);
-const NO = DAY+1, KEY = "pingle-"+NO, MAX = 6;
+const NO = DAY+1, MAX = 6;
+const mod = (a,m)=>((a%m)+m)%m;
 function seeded(seed){ let s=seed>>>0; return ()=>{ s=Math.imul(s^(s>>>15),2246822519)+1013904223>>>0; return s/4294967296; }; }
-const order = CITIES.map(c=>c.i); { const r = seeded(9001); for(let i=order.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[order[i],order[j]]=[order[j],order[i]];} }
-const TARGET = CITIES[order[((DAY%order.length)+order.length)%order.length]];
+function shuffled(arr, r){ const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+const DAILY_ORDER = shuffled(HUBS, seeded(9001));
+const HARD_ORDER = shuffled(MORE, seeded(4242));
 const ANCHORS = ["London","Tokyo","São Paulo","Ashburn","Sydney","Johannesburg","Singapore","Los Angeles","Dubai"].map(nm=>CITIES.find(c=>c.name===nm));
-const START = (()=>{ const r = seeded(DAY*7919+17); const pool = ANCHORS.filter(c=>dist(c,TARGET)>2500).sort(()=>r()-.5);
-  const a = pool[0]; const b = pool.find(c=>c!==a && dist(c,a)>6000) || pool[1]; return [a,b]; })();
+function pickStart(target, r){
+  const pool = shuffled(ANCHORS.filter(c=>dist(c,target)>2500), r);
+  const a = pool[0]; const b = pool.find(c=>c!==a && dist(c,a)>6000) || pool[1]; return [a,b];
+}
+function makeGame(mode){
+  if (mode==="daily") return {mode, target:DAILY_ORDER[mod(DAY,HUBS.length)], start:pickStart(DAILY_ORDER[mod(DAY,HUBS.length)], seeded(DAY*7919+17)), pool:HUBS, key:"pingle-"+NO, label:`No. ${NO}`};
+  if (mode==="hard") { const t = HARD_ORDER[mod(DAY,MORE.length)]; return {mode, target:t, start:pickStart(t, seeded(DAY*104729+3)), pool:CITIES, key:"pingle-hard-"+NO, label:`Hard No. ${NO}`}; }
+  const r = seeded(Math.random()*4294967296); const t = CITIES[Math.floor(r()*CITIES.length)];
+  return {mode, target:t, start:pickStart(t, r), pool:CITIES, key:null, label:"Practice"};
+}
 
 /* ---------- state ---------- */
-let S = { pings:[], done:false, won:false };
-try { const s = JSON.parse(localStorage.getItem(KEY)||"null"); if (s?.pings) S = s; } catch(e){}
-function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
-const allPings = () => [...START.map(c=>({c:c.i,free:true})), ...S.pings.map(c=>({c}))];
-let query = "", near = null;
+const MODES = ["daily","hard","practice"];
+let G, S, query = "", near = null, fits = new Set();
+const store = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k)||"null"); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+};
+let practice = null; // kept in memory so switching tabs doesn't throw a round away
+function load(mode){
+  if (mode==="practice"){ if (!practice) practice = {G:makeGame("practice"), S:{pings:[],done:false,won:false}}; G = practice.G; S = practice.S; }
+  else { G = makeGame(mode); S = store.get(G.key); if (!S?.pings) S = {pings:[],done:false,won:false}; }
+  query = ""; near = null;
+}
+function persist(){ if (G.key) store.set(G.key, S); }
+const allPings = () => [...G.start.map(c=>({c:c.i,free:true})), ...S.pings.map(c=>({c}))];
 
-/* ---------- map ---------- */
+/* ---------- stats ---------- */
+function blankStats(){ return {played:0,won:0,streak:0,best:0,last:null,dist:[0,0,0,0,0,0]}; }
+function getStats(mode){ return Object.assign(blankStats(), store.get("pingle-stats")?.[mode] || {}); }
+function record(){
+  if (!G.key || S.counted) return;
+  const all = store.get("pingle-stats") || {}; const st = getStats(G.mode);
+  st.played++;
+  if (S.won){ st.won++; st.dist[S.pings.length-1]++; st.streak = st.last===NO-1 ? st.streak+1 : 1; st.best = Math.max(st.best, st.streak); }
+  else st.streak = 0;
+  st.last = NO; all[G.mode] = st; store.set("pingle-stats", all);
+  S.counted = true; persist();
+}
+
+/* ---------- map view: pan and zoom ---------- */
 const cv = document.getElementById("map"), ctx = cv.getContext("2d");
-const LAT_TOP = 80, LAT_BOT = -56, STEP = 2;
+const LAT_TOP = 80, LAT_BOT = -56, STEP = 2, MW = 360, MH = LAT_TOP-LAT_BOT, ZMAX = 8;
 function inPoly(x,y,p){ let ins=false; for(let i=0,j=p.length-1;i<p.length;j=i++){ const [xi,yi]=p[i],[xj,yj]=p[j]; if(((yi>y)!==(yj>y)) && x < (xj-xi)*(y-yi)/(yj-yi)+xi) ins=!ins; } return ins; }
 const DOTS = [];
 for (let lat=LAT_TOP; lat>=LAT_BOT; lat-=STEP) for (let lon=-180+STEP/2; lon<180; lon+=STEP)
-  DOTS.push({lat,lon,land:LAND.some(p=>inPoly(lon,lat,p))});
+  DOTS.push({lat,lon,land:LAND.some(p=>inPoly(lon,lat,p)),s:0});
 const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-let W=900,H=420;
-function size(){ const w = cv.clientWidth || 860; W = w; H = Math.round(w*(LAT_TOP-LAT_BOT)/360); const dpr = devicePixelRatio||1;
-  cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0); }
-const px = (lat,lon) => [ (lon+180)/360*W, (LAT_TOP-lat)/(LAT_TOP-LAT_BOT)*H ];
+let W=860, H=325, kmin=1, V = {z:1, cx:MW/2, cy:MH/2};
+const k = () => kmin*V.z;
+function clampView(){
+  V.z = Math.min(ZMAX, Math.max(1, V.z));
+  const hw = W/(2*k()), hh = H/(2*k());
+  V.cx = Math.min(MW-hw, Math.max(hw, V.cx)); V.cy = Math.min(MH-hh, Math.max(hh, V.cy));
+  if (hw*2 >= MW) V.cx = MW/2; if (hh*2 >= MH) V.cy = MH/2;
+}
+function size(){
+  W = cv.parentElement.clientWidth || 840;
+  H = Math.round(Math.max(W*MH/MW, Math.min(300, W*.8)));
+  cv.style.height = H+"px";
+  const dpr = devicePixelRatio||1; cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0);
+  kmin = Math.max(W/MW, H/MH); clampView();
+}
+const px = (lat,lon) => [ (lon+180-V.cx)*k() + W/2, (LAT_TOP-lat-V.cy)*k() + H/2 ];
+const unpx = (x,y) => ({ lon: (x-W/2)/k() + V.cx - 180, lat: LAT_TOP - ((y-H/2)/k() + V.cy) });
+function zoomAt(x,y,f){
+  const m = unpx(x,y); V.z *= f;
+  V.cx = (m.lon+180) - (x-W/2)/k(); V.cy = (LAT_TOP-m.lat) - (y-H/2)/k(); clampView(); draw();
+}
+function centerOn(cities){
+  const lon = cities.reduce((s,c)=>s+c.lon,0)/cities.length; V.cx = lon+180; V.cy = MH/2; clampView();
+}
+
+/* which dots and cities fit every ping so far */
+function classify(){
+  const ps = allPings().map(p=>({c:CITIES[p.c], b:band(rtt(CITIES[p.c],G.target))}));
+  const ok = (pt,p) => { const d = dist(pt,p.c); return d>=p.b.lo-120 && d<=p.b.hi+120; };
+  for (const d of DOTS){ let all=true, any=false; for (const p of ps){ const o = ok(d,p); any ||= o; all &&= o; } d.s = all ? 2 : any ? 1 : 0; }
+  const used = new Set(allPings().map(p=>p.c));
+  fits = new Set(G.pool.filter(c=>!used.has(c.i) && ps.every(p=>{ const d = dist(c,p.c); return d>=p.b.lo-60 && d<=p.b.hi+60; })).map(c=>c.i));
+}
 
 function draw(){
-  const sea=tok("--sea"), land=tok("--land"), sig=tok("--signal"), city=tok("--city"), found=tok("--found");
+  const sea=tok("--sea"), land=tok("--land"), sig=tok("--signal"), city=tok("--city"), found=tok("--found"), panel=tok("--panel");
   ctx.clearRect(0,0,W,H);
-  const ps = allPings().map(p=>({c:CITIES[p.c], b:band(rtt(CITIES[p.c],TARGET))}));
-  const r = Math.max(.9, W/360*STEP*.32);
+  const r = Math.min(7, Math.max(.9, k()*STEP*.32));
   for (const d of DOTS){
-    let inAll = ps.length>0, inAny = false;
-    for (const p of ps){ const k = dist(d,p.c); const ok = k>=p.b.lo-120 && k<=p.b.hi+120; inAny ||= ok; inAll &&= ok; }
     const [x,y] = px(d.lat,d.lon);
+    if (x<-10||x>W+10||y<-10||y>H+10) continue;
     ctx.globalAlpha = 1;
-    if (inAll){ ctx.fillStyle = sig; ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(x,y,r*1.5,0,7); ctx.fill(); continue; }
+    if (d.s===2){ ctx.fillStyle = sig; ctx.beginPath(); ctx.arc(x,y,r*1.5,0,7); ctx.fill(); continue; }
     ctx.fillStyle = d.land ? land : sea;
     ctx.beginPath(); ctx.arc(x,y,d.land?r:r*.75,0,7); ctx.fill();
-    if (inAny){ ctx.fillStyle = sig; ctx.globalAlpha = .3; ctx.beginPath(); ctx.arc(x,y,r*1.3,0,7); ctx.fill(); }
+    if (d.s===1){ ctx.fillStyle = sig; ctx.globalAlpha = .3; ctx.beginPath(); ctx.arc(x,y,r*1.3,0,7); ctx.fill(); }
   }
   ctx.globalAlpha = 1;
   const pinged = new Set(allPings().map(p=>p.c));
-  for (const c of CITIES){
-    const [x,y] = px(c.lat,c.lon);
-    const isTarget = S.done && c.i===TARGET.i;
-    ctx.lineWidth = 1.5; ctx.strokeStyle = isTarget ? found : city;
-    ctx.beginPath(); ctx.arc(x,y,isTarget?7:3.2,0,7); ctx.stroke();
+  for (const c of G.pool){
+    const [x,y] = px(c.lat,c.lon); if (x<-10||x>W+10||y<-10||y>H+10) continue;
+    const isTarget = S.done && c.i===G.target.i, small = !c.hub && V.z<2.5;
+    ctx.lineWidth = small?1:1.5; ctx.strokeStyle = isTarget ? found : city;
+    ctx.beginPath(); ctx.arc(x,y,isTarget?7:small?2.2:3.2,0,7); ctx.stroke();
     if (pinged.has(c.i) && !isTarget){ ctx.fillStyle = sig; ctx.beginPath(); ctx.arc(x,y,3.2,0,7); ctx.fill(); }
     if (isTarget){ ctx.fillStyle = found; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill(); }
   }
+  if (S.done && !G.pool.includes(G.target)){ const [x,y]=px(G.target.lat,G.target.lon); ctx.fillStyle=found; ctx.beginPath(); ctx.arc(x,y,6,0,7); ctx.fill(); }
   if (near){ const [x,y]=px(near.lat,near.lon); ctx.strokeStyle=sig; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,14,0,7); ctx.stroke(); }
   ctx.font = `600 ${W<500?10:12}px Inter, system-ui, sans-serif`;
-  for (const p of allPings()){ const c = CITIES[p.c], [x,y]=px(c.lat,c.lon); const t = `${c.name} ${rtt(c,TARGET)}ms`;
-    ctx.fillStyle = tok("--panel"); const w = ctx.measureText(t).width; const tx = Math.min(Math.max(x+6,2), W-w-6);
+  const labels = allPings().map(p=>CITIES[p.c]); if (S.done && !labels.includes(G.target)) labels.push(G.target);
+  if (V.z>=3) for (const c of G.pool) if (!labels.includes(c)) { const [x,y]=px(c.lat,c.lon); if (x>0&&x<W&&y>0&&y<H){ ctx.fillStyle=city; ctx.globalAlpha=.7; ctx.fillText(c.name,x+5,y+4); ctx.globalAlpha=1; } }
+  for (const c of labels){ const [x,y]=px(c.lat,c.lon); const t = c===G.target&&S.done&&!pinged.has(c.i) ? c.name : `${c.name} ${rtt(c,G.target)}ms`;
+    ctx.fillStyle = panel; const w = ctx.measureText(t).width; const tx = Math.min(Math.max(x+6,2), W-w-6);
     ctx.globalAlpha=.85; ctx.fillRect(tx-3,y-17,w+6,15); ctx.globalAlpha=1; ctx.fillStyle = city; ctx.fillText(t,tx,y-6); }
 }
 
-cv.addEventListener("click", ev => {
-  if (S.done) return;
-  const b = cv.getBoundingClientRect(); const x = ev.clientX-b.left, y = ev.clientY-b.top;
-  const lon = x/W*360-180, lat = LAT_TOP - y/H*(LAT_TOP-LAT_BOT);
-  near = {lat,lon}; query = ""; renderSide(); draw();
+/* pointer: drag pans, pinch zooms, a tap picks the spot */
+const pts = new Map(); let moved = false, pinch = null;
+const local = e => { const b = cv.getBoundingClientRect(); return {x:e.clientX-b.left, y:e.clientY-b.top}; };
+cv.addEventListener("pointerdown", e => {
+  cv.setPointerCapture(e.pointerId); const p = local(e); pts.set(e.pointerId, {...p, ox:p.x, oy:p.y});
+  if (pts.size===1) moved = false;
+  if (pts.size===2){ moved = true; const [a,b] = [...pts.values()]; pinch = {d:Math.hypot(a.x-b.x,a.y-b.y), x:(a.x+b.x)/2, y:(a.y+b.y)/2}; }
 });
+cv.addEventListener("pointermove", e => {
+  if (!pts.has(e.pointerId)) return;
+  const prev = pts.get(e.pointerId), p = {...local(e), ox:prev.ox, oy:prev.oy}; pts.set(e.pointerId, p);
+  if (pts.size===1){
+    const dx = p.x-prev.x, dy = p.y-prev.y;
+    if (Math.hypot(p.x-p.ox, p.y-p.oy) > 6) moved = true;
+    if (moved){ cv.classList.add("dragging"); V.cx -= dx/k(); V.cy -= dy/k(); clampView(); draw(); }
+  } else if (pts.size===2 && pinch){
+    const [a,b] = [...pts.values()]; const d = Math.hypot(a.x-b.x,a.y-b.y), mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+    V.cx -= (mx-pinch.x)/k(); V.cy -= (my-pinch.y)/k();
+    zoomAt(mx,my,d/pinch.d); pinch = {d,x:mx,y:my};
+  }
+});
+function lift(e, cancel){
+  if (!pts.has(e.pointerId)) return;
+  if (!cancel && pts.size===1 && !moved) tap(local(e));
+  pts.delete(e.pointerId); if (pts.size<2) pinch = null; if (!pts.size) cv.classList.remove("dragging");
+}
+cv.addEventListener("pointerup", e=>lift(e,false));
+cv.addEventListener("pointercancel", e=>lift(e,true));
+cv.addEventListener("wheel", e => { if (!e.ctrlKey && V.z===1) return; e.preventDefault(); const p = local(e); zoomAt(p.x,p.y, Math.exp(-e.deltaY*(e.ctrlKey?.01:.002))); }, {passive:false});
+document.getElementById("zin").onclick = ()=>zoomAt(W/2,H/2,1.6);
+document.getElementById("zout").onclick = ()=>zoomAt(W/2,H/2,1/1.6);
+document.getElementById("zfit").onclick = ()=>{ V.z = 1; clampView(); draw(); };
+function tap(p){ if (S.done) return; near = unpx(p.x,p.y); query = ""; renderSide(); draw(); }
 
 /* ---------- side panel ---------- */
 const $ = s => document.querySelector(s);
@@ -251,62 +397,96 @@ const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&
 const fmt = km => km>=1000 ? (Math.round(km/100)/10).toLocaleString()+"k km" : Math.round(km/10)*10+" km";
 
 function ping(i){
-  if (S.done || S.pings.includes(i) || START.some(c=>c.i===i)) return;
+  if (S.done || S.pings.includes(i) || G.start.some(c=>c.i===i)) return;
   S.pings.push(i);
-  if (i===TARGET.i){ S.done = true; S.won = true; }
+  if (i===G.target.i){ S.done = true; S.won = true; }
   else if (S.pings.length>=MAX){ S.done = true; }
-  persist(); near = null; query = ""; render();
+  persist(); if (S.done){ record(); centerOn([G.target]); }
+  near = null; query = ""; render();
 }
 
+const searchList = () => G.pool.filter(c=>c.name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").includes(query.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")));
 function choicesHTML(list){
   const used = new Set(allPings().map(p=>p.c));
-  return list.filter(c=>!used.has(c.i)).slice(0,5).map(c=>`<button class="choice" data-i="${c.i}" type="button"><span>Ping from <b>${esc(c.name)}</b></span>${near?`<small>${fmt(dist(near,c))} from tap</small>`:""}</button>`).join("");
+  return list.filter(c=>!used.has(c.i)).slice(0,5).map(c=>`<button class="choice ${fits.has(c.i)?"fits":""}" data-i="${c.i}" type="button"><span>Ping from <b>${esc(c.name)}</b></span>${near?`<small>${fmt(dist(near,c))} from tap</small>`:(fits.has(c.i)?"<small>fits</small>":"")}</button>`).join("");
 }
 
 function renderSide(){
   const side = $("#side");
   if (S.done) return renderEnd(side);
   const left = MAX - S.pings.length;
-  let list;
-  if (query) list = CITIES.filter(c=>c.name.toLowerCase().includes(query.toLowerCase()));
-  else if (near) list = [...CITIES].sort((a,b)=>dist(near,a)-dist(near,b));
-  else list = [];
+  let list = [];
+  if (query) list = searchList();
+  else if (near) list = [...G.pool].sort((a,b)=>dist(near,a)-dist(near,b));
   side.innerHTML = `<div class="eyebrow">Send a ping · ${left} left</div>
     <label for="q" class="hint">Tap the map near a city, or search for one.</label>
-    <input type="search" id="q" placeholder="Search cities" value="${esc(query)}" autocomplete="off">
+    <input type="search" id="q" placeholder="Search ${G.pool.length} cities" value="${esc(query)}" autocomplete="off">
     <div class="choices" id="choices">${choicesHTML(list)}</div>
-    ${!query && !near ? `<p class="hint">Start inside the brightest dots. That's where every ping so far agrees the server could be.</p>`:""}`;
+    ${!query && !near ? `<p class="hint"><b>${fits.size}</b> ${fits.size===1?"city fits":"cities fit"} every ping so far. Start inside the brightest dots.</p>`:""}`;
   const q = $("#q");
-  q.addEventListener("input", ()=>{ query = q.value; near = null; $("#choices").innerHTML = choicesHTML(query?CITIES.filter(c=>c.name.toLowerCase().includes(query.toLowerCase())):[]); bind(); draw(); });
+  q.addEventListener("input", ()=>{ query = q.value; near = null; $("#choices").innerHTML = choicesHTML(query?searchList():[]); bind(); draw(); });
   bind();
 }
 function bind(){ document.querySelectorAll(".choice").forEach(b=>b.onclick=()=>ping(+b.dataset.i)); }
 
+function statsHTML(){
+  if (!G.key) return "";
+  const st = getStats(G.mode), top = Math.max(1,...st.dist);
+  return `<div class="stats">
+      <div><b>${st.played}</b><span>Played</span></div>
+      <div><b>${st.played?Math.round(100*st.won/st.played):0}%</b><span>Found</span></div>
+      <div><b>${st.streak}</b><span>Streak</span></div>
+      <div><b>${st.best}</b><span>Best</span></div>
+    </div>
+    <div class="dist" aria-label="Pings needed in past games">${st.dist.map((v,j)=>`<div><span>${j+1}</span><i class="${S.won&&S.pings.length===j+1?"now":""}" style="width:${Math.max(8,100*v/top)}%">${v}</i></div>`).join("")}</div>`;
+}
+
 function renderEnd(side){
   const used = S.pings.length;
-  const grid = S.pings.map(i=>i===TARGET.i?"🎯":"📡").join("") + (S.won?"":"❌");
-  const share = `Pingle No. ${NO}\n${grid} ${S.won?used:"X"}/${MAX}`;
+  const grid = S.pings.map(i=>i===G.target.i?"🎯":"📡").join("") + (S.won?"":"❌");
+  const share = `Pingle ${G.label}\n${grid} ${S.won?used:"X"}/${MAX}`;
   const nextMs = EPOCH+(DAY+1)*864e5-Date.now();
+  const missed = !S.won ? `${fmt(Math.min(...S.pings.map(i=>dist(CITIES[i],G.target))))} from your closest ping.` : "";
   side.innerHTML = `<div class="eyebrow">${S.won?"Found it":"Out of pings"}</div>
-    <p class="result">${S.won?`The server was in ${esc(TARGET.name)}. Found in ${used} ${used===1?"ping":"pings"}.`:`The server was in ${esc(TARGET.name)}.`}</p>
-    <pre class="share" id="shareText">${esc(share)}</pre>
-    <button class="btn" id="copy" type="button">Copy result</button>
-    <p class="hint">New server in ${Math.floor(nextMs/36e5)}h ${Math.floor(nextMs%36e5/6e4)}m.</p>`;
-  $("#copy").onclick = async ()=>{ try{ await navigator.clipboard.writeText(share); $("#copy").textContent="Copied"; }catch(e){ const r=document.createRange(); r.selectNodeContents($("#shareText")); const s=getSelection(); s.removeAllRanges(); s.addRange(r); $("#copy").textContent="Selected, press copy"; } };
+    <p class="result">${S.won?`The server was in ${esc(G.target.name)}. Found in ${used} ${used===1?"ping":"pings"}.`:`The server was in ${esc(G.target.name)}. ${missed}`}</p>
+    ${G.key?`<pre class="share" id="shareText">${esc(share)}</pre>`:""}
+    <div class="row">
+      ${G.key?`<button class="btn" id="copy" type="button">Copy result</button>`:""}
+      <button class="btn ${G.key?"ghost":""}" id="again" type="button">${G.key?"Practice round":"New practice round"}</button>
+    </div>
+    ${statsHTML()}
+    ${G.key?`<p class="hint">New ${G.mode==="hard"?"hard ":""}server in ${Math.floor(nextMs/36e5)}h ${Math.floor(nextMs%36e5/6e4)}m.</p>`:""}`;
+  $("#again").onclick = ()=>{ practice = null; if (location.hash==="#practice") start("practice"); else location.hash = "practice"; };
+  if (G.key) $("#copy").onclick = async ()=>{ try{ await navigator.clipboard.writeText(share); $("#copy").textContent="Copied"; }catch(e){ const r=document.createRange(); r.selectNodeContents($("#shareText")); const s=getSelection(); s.removeAllRanges(); s.addRange(r); $("#copy").textContent="Selected, press copy"; } };
 }
 
 function renderLog(){
-  $("#pings").innerHTML = allPings().map(p=>{ const c=CITIES[p.c], ms=rtt(c,TARGET), b=band(ms); const win = c.i===TARGET.i;
+  $("#pings").innerHTML = allPings().map(p=>{ const c=CITIES[p.c], ms=rtt(c,G.target), b=band(ms); const win = c.i===G.target.i;
     return `<li class="${p.free?"free":""} ${win?"win":""}"><span class="city">${esc(c.name)}</span><span class="ms">${ms} ms</span>
     <span class="range">${win?"Same city. That's the server.":`Server is ${fmt(b.lo)}–${fmt(b.hi)} away (light could reach ${fmt(b.limit)})`}</span></li>`; }).reverse().join("");
-  $("#pips").innerHTML = Array.from({length:MAX},(_,k)=>{ const i=S.pings[k]; return `<span class="pip ${i===undefined?"":(i===TARGET.i?"hit":"used")}"></span>`; }).join("");
+  $("#pips").innerHTML = Array.from({length:MAX},(_,j)=>{ const i=S.pings[j]; return `<span class="pip ${i===undefined?"":(i===G.target.i?"hit":"used")}"></span>`; }).join("");
 }
 
-function render(){ $("#meta").textContent = `No. ${NO} · ${new Date(EPOCH+DAY*864e5).toLocaleDateString(undefined,{month:"short",day:"numeric",timeZone:"UTC"})}`; renderSide(); renderLog(); size(); draw(); }
-render();
-{ const sc = document.getElementById("scroller"); if (sc.scrollWidth > sc.clientWidth) {
-  const ps = allPings().map(p=>CITIES[p.c]); const lon = ps.reduce((s,c)=>s+c.lon,0)/ps.length;
-  sc.scrollLeft = (lon+180)/360*sc.scrollWidth - sc.clientWidth/2; } }
+const LEDES = {
+  daily: `A server is hiding in one of the world's big internet hubs. <b>Tap the map and ping it from a city.</b> Each reply tells you how far the signal could have traveled, and the glowing bands narrow down where it lives. Ping from the server's own city to win.`,
+  hard: `Today's hard server is hiding in a <b>smaller city</b>, and there are about 160 places you can ping from. Same rules: overlap the bands, then ping from the server's own city.`,
+  practice: `A fresh random server every round, anywhere on the map. <b>Practice rounds don't count</b> toward your streak.`
+};
+function render(){
+  const date = new Date(EPOCH+DAY*864e5).toLocaleDateString(undefined,{month:"short",day:"numeric",timeZone:"UTC"});
+  $("#meta").textContent = G.key ? `${G.label} · ${date}` : "Practice · unlimited";
+  $("#lede").innerHTML = LEDES[G.mode];
+  document.querySelectorAll(".modes a").forEach(a=>{ if (a.dataset.mode===G.mode) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
+  classify(); renderSide(); renderLog(); size(); draw();
+}
+function start(mode){
+  load(mode); size();
+  V.z = 1; centerOn(allPings().map(p=>CITIES[p.c]));
+  render();
+}
+const modeFromHash = () => MODES.includes(location.hash.slice(1)) ? location.hash.slice(1) : "daily";
+addEventListener("hashchange", ()=>start(modeFromHash()));
+start(modeFromHash());
 addEventListener("resize", ()=>{ size(); draw(); });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
