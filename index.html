@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Pingle</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a dotted world map is the whole board; each ping lights up the band of dots the server could sit in, and overlapping bands glow hotter. */
+:root{
+  --bg:#E8EEF4; --panel:#FFFFFF; --ink:#0F2333; --muted:#55707F; --line:#CFDAE4;
+  --sea:#C9D6E1; --land:#6F8BA0; --signal:#E8641F; --found:#14935F; --city:#0F2333;
+  --display:"Space Grotesk", system-ui, sans-serif;
+  --body:"Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0C1823; --panel:#132331; --ink:#E6EEF4; --muted:#8FA6B6; --line:#24384A;
+  --sea:#1A2D3D; --land:#46637A; --signal:#FF8A3D; --found:#35C489; --city:#E6EEF4; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0C1823; --panel:#132331; --ink:#E6EEF4; --muted:#8FA6B6; --line:#24384A;
+  --sea:#1A2D3D; --land:#46637A; --signal:#FF8A3D; --found:#35C489; --city:#E6EEF4; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(30px,8vw,42px);letter-spacing:-.02em;line-height:1;margin:0}
+h1 span{color:var(--signal)}
+.meta{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+.pips{display:flex;gap:5px}
+.pip{width:12px;height:12px;border-radius:50%;border:2px solid var(--line)}
+.pip.used{background:var(--signal);border-color:var(--signal)}
+.pip.hit{background:var(--found);border-color:var(--found)}
+.lede{margin:0;font-size:15px;color:var(--muted);max-width:60ch}
+.lede b{color:var(--ink)}
+.mapbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;position:relative}
+.scroller{overflow-x:auto;border-radius:8px}
+canvas{display:block;width:max(100%,760px);height:auto;touch-action:manipulation;cursor:crosshair;border-radius:8px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);padding:8px 4px 0}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:640px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.eyebrow{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.pings{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.pings li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:baseline;border-top:1px solid var(--line);padding-top:8px}
+.pings .city{font-weight:600;overflow-wrap:anywhere}
+.pings .ms{font-family:var(--mono);font-size:18px;color:var(--signal);font-variant-numeric:tabular-nums;text-align:right}
+.pings .range{grid-column:1/-1;font-size:13px;color:var(--muted)}
+.pings li.free .city::after{content:" · starting probe";font-weight:400;color:var(--muted);font-size:13px}
+.pings li.win .ms{color:var(--found)}
+input[type=search]{width:100%;font:inherit;font-size:16px;padding:12px 14px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+input[type=search]:focus{outline:none;border-color:var(--signal)}
+.choices{display:flex;flex-direction:column;gap:6px}
+.choice{font:inherit;display:flex;justify-content:space-between;gap:10px;text-align:left;padding:11px 14px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.choice:hover{border-color:var(--signal)}
+.choice:focus-visible,.btn:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+.choice small{color:var(--muted);font-family:var(--mono);font-size:12px;flex:none}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.btn{font:inherit;font-weight:600;padding:12px 16px;border-radius:10px;border:0;background:var(--ink);color:var(--panel);cursor:pointer}
+.result{font-family:var(--display);font-weight:700;font-size:26px;line-height:1.2;margin:0}
+.share{font-family:var(--mono);font-size:13px;white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:12px;margin:0}
+.how{font-size:14px;color:var(--muted)}
+.how summary{cursor:pointer;font-weight:600;color:var(--ink)}
+.how p{margin:8px 0 0;max-width:68ch}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Pin<span>g</span>le</h1>
+      <div class="meta" id="meta">Daily</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+      <div class="meta">Pings left</div>
+      <div class="pips" id="pips"></div>
+    </div>
+  </header>
+  <p class="lede">A server is hiding somewhere on Earth. <b>Tap the map and ping it from a city.</b> On a phone, swipe the map sideways. Each reply tells you how far the signal could have traveled, and the glowing bands narrow down where it lives. Ping from the server's own city to win.</p>
+  <div class="mapbox">
+    <div class="scroller" id="scroller"><canvas id="map" width="900" height="420" aria-label="World map showing where the server could be"></canvas></div>
+    <div class="legend">
+      <span><i style="background:var(--signal);opacity:.35"></i>Inside one ping band</span>
+      <span><i style="background:var(--signal)"></i>Inside every band</span>
+      <span><i style="border:2px solid var(--city)"></i>City you can ping from</span>
+    </div>
+  </div>
+  <div class="grid">
+    <section class="panel" id="side"></section>
+    <section class="panel">
+      <div class="eyebrow">Ping log</div>
+      <ul class="pings" id="pings"></ul>
+    </section>
+  </div>
+  <details class="how">
+    <summary>How the clues work</summary>
+    <p>Light in fiber-optic cable covers about 200 km per millisecond, and a ping has to go there and back. So a 40 ms reply means the server is at most about 4,000 km away. Real cables don't run in straight lines, so the true distance is usually about 60–80% of that limit, which is the band you see on the map.</p>
+    <p>This prototype simulates each reply from the real distance between cities with realistic routing detours. The full version will use real measurements from volunteer probes around the world.</p>
+  </details>
+</div>
+
+<script>
+/* ---------- world (hand-traced coastlines, lon/lat) ---------- */
+const LAND = [
+ [[-168,66],[-162,70],[-156,71.5],[-140,70],[-128,70],[-115,68],[-95,72],[-82,73],[-75,68],[-64,60],[-56,52],[-53,47],[-66,44],[-70,41.5],[-76,35],[-81,31],[-80,25.5],[-82,27],[-84,30],[-90,29.5],[-97,26],[-97,22],[-92,18.5],[-87,21],[-88,16],[-83,15],[-83,10],[-79,9],[-80,7.5],[-83,8],[-86,11],[-91,14],[-96,16],[-105,20],[-106,23],[-110,24],[-112,29],[-114.5,31],[-117,32.5],[-121,35],[-124,40],[-124,46],[-123,48.5],[-130,54],[-136,58],[-145,60],[-152,59],[-158,57],[-165,54.5],[-160,58],[-162,60],[-166,62],[-165,64],[-168,66]],
+ [[-80,73.5],[-70,70.5],[-62,66.5],[-66,62],[-73,64],[-80,64.5],[-90,71.5]],
+ [[-100,78],[-90,82],[-62,82.5],[-75,78],[-90,76]],
+ [[-73,78],[-60,82],[-30,83.5],[-20,81],[-18,76],[-22,70],[-32,68],[-40,65],[-43,60],[-48,61],[-52,65],[-55,70],[-60,76]],
+ [[-24,65.5],[-22,66.4],[-15,66.5],[-13.5,65],[-18,63.4],[-22.5,63.8]],
+ [[-85,21.9],[-80,23.2],[-74.2,20.2],[-77.5,19.9],[-80,21.8]],
+ [[-80,9],[-77,8],[-72,12],[-63,10.5],[-60,8],[-52,4],[-50,0],[-44,-2],[-35,-5],[-35,-9],[-39,-15],[-41,-22],[-48,-26],[-53,-33],[-58,-38],[-62,-41],[-65,-45],[-68,-50],[-69,-55],[-74,-52],[-75,-46],[-73,-40],[-71.5,-30],[-70.5,-18],[-76,-14],[-80,-6],[-81,-3],[-80,1],[-78,4],[-77.5,7]],
+ [[-9,37],[-9,43],[-2,43.5],[-1.5,46],[-4.5,48.5],[1,50.5],[4,51.5],[8,54],[8.5,57],[10.5,57.5],[10.5,54.5],[14,54],[21,55],[22,58.5],[24,60],[30,60],[23,61],[21,63],[25,65.5],[22,66],[17,62.5],[18,59],[16,56.5],[12.5,56],[11,59],[5,58],[5,62],[12,66],[16,69],[20,70],[28,71],[34,69.5],[41,67],[44,68.5],[54,68.5],[60,69.5],[69,73],[80,73],[87,75],[100,77.5],[113,73.5],[130,71],[141,72.5],[160,69.5],[170,70],[180,66],[180,65],[175,62],[163,60],[162,56],[156,51],[156,57],[160,61],[154,59],[143,59],[137,54],[141,52],[140,48],[135,43],[130,42.5],[129,36],[126.5,34.5],[126,38],[124.5,40],[121.5,39],[119,37.5],[120,35],[121.5,31.5],[122,29],[119.5,25],[114,22.3],[110,21],[108,21.5],[106,19],[108.5,15],[109,11.5],[106.5,9.5],[105,8.6],[103,10.5],[100.5,13.5],[99.5,10],[100.5,7],[103,5.5],[104,1.4],[101,2.8],[98.5,8],[98,13],[97.5,17],[94.5,16],[94,19.5],[92,22],[90,22],[87,21.5],[86,20],[80.5,15.8],[80,10],[77.5,8],[76,11],[73,17],[72.5,21.5],[69,22.5],[66.5,25.4],[61.5,25],[57,25.8],[56.4,27],[52,27.8],[50,30],[48,30],[48.5,28],[50.5,25],[51.5,24],[56.4,24.7],[56.4,26.4],[58,23.5],[59.8,22.5],[57.5,18.9],[55,17],[52,16],[45,13],[43.3,12.7],[42.7,16],[40,20],[38.5,23],[37,26],[35,28],[34.9,29.5],[34.2,31.3],[35,33],[36,35.8],[36,36.8],[32,36.2],[30,36.4],[27,37],[26,40],[24,40.5],[22.5,40],[23.5,38],[22,37],[21,38.5],[19.5,40],[19.5,42],[16,43.5],[13.7,45.5],[12.3,45],[14,42],[16,40],[18.5,40.2],[16,38],[15.6,40],[12,41.7],[10.5,43],[8.7,44.4],[7,43.6],[4,43.4],[3.2,42],[0.5,40.5],[-0.3,39],[-2,36.8],[-5.5,36],[-7,37]],
+ [[-5.5,50],[1.5,51],[1.7,52.7],[0,53.5],[-1.5,55],[-2,57],[-3,58.6],[-5,58.6],[-6.2,57.3],[-5,55],[-3,54.5],[-4.5,53.3],[-4.5,51.7]],
+ [[-10,51.6],[-6,52],[-6,54],[-7.5,55.3],[-10,54]],
+ [[-17,21],[-16,24],[-13,27.5],[-10,29.5],[-9.5,32],[-6,35.8],[-2,35.1],[3,36.8],[10,37.3],[11,35],[10,33.8],[15,32.4],[19.5,30.3],[20,32],[25,31.7],[29,30.9],[32.5,31.2],[34.2,31.3],[34.5,28],[35.5,24],[37.2,21],[38.5,18],[39.7,15.5],[41.5,13.5],[43.3,12],[44.5,10.4],[51,11.8],[51,10.5],[48,4.5],[44,0],[41,-2],[39.5,-5],[40.5,-10.5],[40.5,-15],[35,-19.5],[35.5,-24],[32.8,-26],[32,-29],[28,-33],[25,-34],[20,-34.8],[18.4,-34],[17,-29],[15,-26],[14.5,-22.5],[11.8,-17],[13.5,-12],[13,-9],[12,-6],[9,-1],[9.8,2],[8.5,4.5],[6,4.3],[4.5,6.3],[1,6],[-2,4.7],[-7.5,4.4],[-11.5,6.9],[-13.5,9.5],[-15,11],[-16.7,12.5],[-17,14.7],[-16,18]],
+ [[44,-25],[47,-25],[49.5,-17],[50.5,-15.5],[49,-12],[47,-15.5],[44,-17],[43.5,-22]],
+ [[79.8,9.8],[80.2,9.8],[81.8,7],[80.6,6],[79.8,7.5]],
+ [[95,5.5],[98,4],[104,-2],[106,-6],[104,-5.8],[101,-3],[98,0],[95,3]],
+ [[105,-6],[114.5,-8.5],[106,-7.5]],
+ [[109,2],[111,-3],[116,-4],[118.5,1],[117,7],[113,3]],
+ [[119,-1],[121,1.5],[125,1.5],[121.5,-2],[123,-5.5],[120.5,-5.5]],
+ [[131,-1],[141,-2.5],[150,-6],[147,-8],[143,-9],[138,-8],[132,-4]],
+ [[120,18.5],[122,18.5],[124,13],[126,8],[125.5,6],[122,7],[120,14]],
+ [[120.2,22.5],[121.5,25.2],[121.9,24.5],[120.8,22]],
+ [[130,31],[132,33.5],[135,33.5],[140,35],[141,38],[142,40],[141.5,41.5],[140,40.5],[139.5,38],[137,37],[133,35.6],[130,34]],
+ [[140,41.5],[145.5,43.3],[142,45.5],[140,43]],
+ [[142,46],[143.5,49],[142.5,54],[142,51]],
+ [[114,-22],[113.5,-26],[115,-34],[118,-35],[124,-33.5],[129,-31.6],[134,-32.7],[138,-35],[140,-38],[146,-39],[150,-37.5],[153,-31],[153.5,-25],[149,-20],[145.5,-15],[143.5,-11],[142,-11],[141.5,-17],[139,-17.5],[136,-15],[137,-12],[132.5,-11.2],[129.5,-15],[126,-14],[122,-18]],
+ [[144.5,-40.7],[148.3,-40.9],[147.5,-43.2],[145.5,-43.5]],
+ [[172.7,-34.4],[178.5,-37.7],[176.8,-40],[174.7,-41.3],[174,-39.5]],
+ [[172.5,-40.5],[174,-41.8],[171,-44.5],[168,-46.6],[166.5,-45.8],[168.5,-43.5]],
+];
+
+/* ---------- cities you can ping from ---------- */
+const CITIES = [
+ ["Ashburn",39.04,-77.49],["New York",40.71,-74.01],["Chicago",41.88,-87.63],["Atlanta",33.75,-84.39],["Miami",25.76,-80.19],
+ ["Dallas",32.78,-96.80],["Denver",39.74,-104.99],["Phoenix",33.45,-112.07],["Los Angeles",34.05,-118.24],["San Jose",37.34,-121.89],
+ ["Seattle",47.61,-122.33],["Toronto",43.65,-79.38],["Montreal",45.50,-73.57],["Vancouver",49.28,-123.12],["Mexico City",19.43,-99.13],
+ ["Honolulu",21.31,-157.86],["Anchorage",61.22,-149.90],["Bogotá",4.71,-74.07],["Lima",-12.05,-77.04],["Santiago",-33.45,-70.67],
+ ["São Paulo",-23.55,-46.63],["Buenos Aires",-34.60,-58.38],["Fortaleza",-3.73,-38.53],["London",51.51,-0.13],["Dublin",53.35,-6.26],
+ ["Paris",48.86,2.35],["Amsterdam",52.37,4.90],["Frankfurt",50.11,8.68],["Zurich",47.38,8.54],["Milan",45.46,9.19],
+ ["Madrid",40.42,-3.70],["Lisbon",38.72,-9.14],["Stockholm",59.33,18.07],["Helsinki",60.17,24.94],["Oslo",59.91,10.75],
+ ["Warsaw",52.23,21.01],["Vienna",48.21,16.37],["Athens",37.98,23.73],["Istanbul",41.01,28.98],["Reykjavík",64.15,-21.94],
+ ["Tel Aviv",32.09,34.78],["Cairo",30.04,31.24],["Dubai",25.20,55.27],["Riyadh",24.71,46.68],["Mumbai",19.08,72.88],
+ ["Chennai",13.08,80.27],["Delhi",28.61,77.21],["Singapore",1.35,103.82],["Jakarta",-6.21,106.85],["Bangkok",13.76,100.50],
+ ["Hong Kong",22.32,114.17],["Taipei",25.03,121.57],["Manila",14.60,120.98],["Seoul",37.57,126.98],["Tokyo",35.68,139.69],
+ ["Osaka",34.69,135.50],["Sydney",-33.87,151.21],["Melbourne",-37.81,144.96],["Perth",-31.95,115.86],["Auckland",-36.85,174.76],
+ ["Johannesburg",-26.20,28.05],["Cape Town",-33.92,18.42],["Lagos",6.52,3.38],["Nairobi",-1.29,36.82],["Casablanca",33.57,-7.59],
+ ["Moscow",55.76,37.62]
+].map(([name,lat,lon],i)=>({i,name,lat,lon}));
+
+/* ---------- geometry & physics ---------- */
+const R = 6371, rad = d => d*Math.PI/180;
+function dist(a,b){ const dLat=rad(b.lat-a.lat), dLon=rad(b.lon-a.lon);
+  const h=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2; return 2*R*Math.asin(Math.min(1,Math.sqrt(h))); }
+function hash(s){ let h=2166136261; for(const c of s){ h^=c.charCodeAt(0); h=Math.imul(h,16777619);} return (h>>>0)/4294967296; }
+const FIBER = 200;          // km per ms, one way
+const OVERHEAD = 1.5;       // ms of switching and processing
+const DETOUR = [1.25, 1.6];// how much longer real cable routes are than the great circle
+function rtt(from,to){
+  if (from.i===to.i) return 0.4;
+  const d = dist(from,to);
+  const detour = DETOUR[0] + (DETOUR[1]-DETOUR[0]) * hash([from.i,to.i].sort().join("-"));
+  return Math.round((2*d/FIBER*detour + OVERHEAD)*10)/10;
+}
+function band(ms){ // true distance window implied by a reply
+  const limit = Math.max(0,(ms-OVERHEAD)/2*FIBER);
+  return {limit, lo: limit/DETOUR[1], hi: limit/DETOUR[0]};
+}
+
+/* ---------- daily puzzle ---------- */
+const EPOCH = Date.UTC(2026,10,14);
+const n = new Date();
+const DAY = Math.floor((Date.UTC(n.getUTCFullYear(),n.getUTCMonth(),n.getUTCDate())-EPOCH)/864e5);
+const NO = DAY+1, KEY = "pingle-"+NO, MAX = 6;
+function seeded(seed){ let s=seed>>>0; return ()=>{ s=Math.imul(s^(s>>>15),2246822519)+1013904223>>>0; return s/4294967296; }; }
+const order = CITIES.map(c=>c.i); { const r = seeded(9001); for(let i=order.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[order[i],order[j]]=[order[j],order[i]];} }
+const TARGET = CITIES[order[((DAY%order.length)+order.length)%order.length]];
+const ANCHORS = ["London","Tokyo","São Paulo","Ashburn","Sydney","Johannesburg","Singapore","Los Angeles","Dubai"].map(nm=>CITIES.find(c=>c.name===nm));
+const START = (()=>{ const r = seeded(DAY*7919+17); const pool = ANCHORS.filter(c=>dist(c,TARGET)>2500).sort(()=>r()-.5);
+  const a = pool[0]; const b = pool.find(c=>c!==a && dist(c,a)>6000) || pool[1]; return [a,b]; })();
+
+/* ---------- state ---------- */
+let S = { pings:[], done:false, won:false };
+try { const s = JSON.parse(localStorage.getItem(KEY)||"null"); if (s?.pings) S = s; } catch(e){}
+function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+const allPings = () => [...START.map(c=>({c:c.i,free:true})), ...S.pings.map(c=>({c}))];
+let query = "", near = null;
+
+/* ---------- map ---------- */
+const cv = document.getElementById("map"), ctx = cv.getContext("2d");
+const LAT_TOP = 80, LAT_BOT = -56, STEP = 2;
+function inPoly(x,y,p){ let ins=false; for(let i=0,j=p.length-1;i<p.length;j=i++){ const [xi,yi]=p[i],[xj,yj]=p[j]; if(((yi>y)!==(yj>y)) && x < (xj-xi)*(y-yi)/(yj-yi)+xi) ins=!ins; } return ins; }
+const DOTS = [];
+for (let lat=LAT_TOP; lat>=LAT_BOT; lat-=STEP) for (let lon=-180+STEP/2; lon<180; lon+=STEP)
+  DOTS.push({lat,lon,land:LAND.some(p=>inPoly(lon,lat,p))});
+const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let W=900,H=420;
+function size(){ const w = cv.clientWidth || 860; W = w; H = Math.round(w*(LAT_TOP-LAT_BOT)/360); const dpr = devicePixelRatio||1;
+  cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0); }
+const px = (lat,lon) => [ (lon+180)/360*W, (LAT_TOP-lat)/(LAT_TOP-LAT_BOT)*H ];
+
+function draw(){
+  const sea=tok("--sea"), land=tok("--land"), sig=tok("--signal"), city=tok("--city"), found=tok("--found");
+  ctx.clearRect(0,0,W,H);
+  const ps = allPings().map(p=>({c:CITIES[p.c], b:band(rtt(CITIES[p.c],TARGET))}));
+  const r = Math.max(.9, W/360*STEP*.32);
+  for (const d of DOTS){
+    let inAll = ps.length>0, inAny = false;
+    for (const p of ps){ const k = dist(d,p.c); const ok = k>=p.b.lo-120 && k<=p.b.hi+120; inAny ||= ok; inAll &&= ok; }
+    const [x,y] = px(d.lat,d.lon);
+    ctx.globalAlpha = 1;
+    if (inAll){ ctx.fillStyle = sig; ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(x,y,r*1.5,0,7); ctx.fill(); continue; }
+    ctx.fillStyle = d.land ? land : sea;
+    ctx.beginPath(); ctx.arc(x,y,d.land?r:r*.75,0,7); ctx.fill();
+    if (inAny){ ctx.fillStyle = sig; ctx.globalAlpha = .3; ctx.beginPath(); ctx.arc(x,y,r*1.3,0,7); ctx.fill(); }
+  }
+  ctx.globalAlpha = 1;
+  const pinged = new Set(allPings().map(p=>p.c));
+  for (const c of CITIES){
+    const [x,y] = px(c.lat,c.lon);
+    const isTarget = S.done && c.i===TARGET.i;
+    ctx.lineWidth = 1.5; ctx.strokeStyle = isTarget ? found : city;
+    ctx.beginPath(); ctx.arc(x,y,isTarget?7:3.2,0,7); ctx.stroke();
+    if (pinged.has(c.i) && !isTarget){ ctx.fillStyle = sig; ctx.beginPath(); ctx.arc(x,y,3.2,0,7); ctx.fill(); }
+    if (isTarget){ ctx.fillStyle = found; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill(); }
+  }
+  if (near){ const [x,y]=px(near.lat,near.lon); ctx.strokeStyle=sig; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,14,0,7); ctx.stroke(); }
+  ctx.font = `600 ${W<500?10:12}px Inter, system-ui, sans-serif`;
+  for (const p of allPings()){ const c = CITIES[p.c], [x,y]=px(c.lat,c.lon); const t = `${c.name} ${rtt(c,TARGET)}ms`;
+    ctx.fillStyle = tok("--panel"); const w = ctx.measureText(t).width; const tx = Math.min(Math.max(x+6,2), W-w-6);
+    ctx.globalAlpha=.85; ctx.fillRect(tx-3,y-17,w+6,15); ctx.globalAlpha=1; ctx.fillStyle = city; ctx.fillText(t,tx,y-6); }
+}
+
+cv.addEventListener("click", ev => {
+  if (S.done) return;
+  const b = cv.getBoundingClientRect(); const x = ev.clientX-b.left, y = ev.clientY-b.top;
+  const lon = x/W*360-180, lat = LAT_TOP - y/H*(LAT_TOP-LAT_BOT);
+  near = {lat,lon}; query = ""; renderSide(); draw();
+});
+
+/* ---------- side panel ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = km => km>=1000 ? (Math.round(km/100)/10).toLocaleString()+"k km" : Math.round(km/10)*10+" km";
+
+function ping(i){
+  if (S.done || S.pings.includes(i) || START.some(c=>c.i===i)) return;
+  S.pings.push(i);
+  if (i===TARGET.i){ S.done = true; S.won = true; }
+  else if (S.pings.length>=MAX){ S.done = true; }
+  persist(); near = null; query = ""; render();
+}
+
+function choicesHTML(list){
+  const used = new Set(allPings().map(p=>p.c));
+  return list.filter(c=>!used.has(c.i)).slice(0,5).map(c=>`<button class="choice" data-i="${c.i}" type="button"><span>Ping from <b>${esc(c.name)}</b></span>${near?`<small>${fmt(dist(near,c))} from tap</small>`:""}</button>`).join("");
+}
+
+function renderSide(){
+  const side = $("#side");
+  if (S.done) return renderEnd(side);
+  const left = MAX - S.pings.length;
+  let list;
+  if (query) list = CITIES.filter(c=>c.name.toLowerCase().includes(query.toLowerCase()));
+  else if (near) list = [...CITIES].sort((a,b)=>dist(near,a)-dist(near,b));
+  else list = [];
+  side.innerHTML = `<div class="eyebrow">Send a ping · ${left} left</div>
+    <label for="q" class="hint">Tap the map near a city, or search for one.</label>
+    <input type="search" id="q" placeholder="Search cities" value="${esc(query)}" autocomplete="off">
+    <div class="choices" id="choices">${choicesHTML(list)}</div>
+    ${!query && !near ? `<p class="hint">Start inside the brightest dots. That's where every ping so far agrees the server could be.</p>`:""}`;
+  const q = $("#q");
+  q.addEventListener("input", ()=>{ query = q.value; near = null; $("#choices").innerHTML = choicesHTML(query?CITIES.filter(c=>c.name.toLowerCase().includes(query.toLowerCase())):[]); bind(); draw(); });
+  bind();
+}
+function bind(){ document.querySelectorAll(".choice").forEach(b=>b.onclick=()=>ping(+b.dataset.i)); }
+
+function renderEnd(side){
+  const used = S.pings.length;
+  const grid = S.pings.map(i=>i===TARGET.i?"🎯":"📡").join("") + (S.won?"":"❌");
+  const share = `Pingle No. ${NO}\n${grid} ${S.won?used:"X"}/${MAX}`;
+  const nextMs = EPOCH+(DAY+1)*864e5-Date.now();
+  side.innerHTML = `<div class="eyebrow">${S.won?"Found it":"Out of pings"}</div>
+    <p class="result">${S.won?`The server was in ${esc(TARGET.name)}. Found in ${used} ${used===1?"ping":"pings"}.`:`The server was in ${esc(TARGET.name)}.`}</p>
+    <pre class="share" id="shareText">${esc(share)}</pre>
+    <button class="btn" id="copy" type="button">Copy result</button>
+    <p class="hint">New server in ${Math.floor(nextMs/36e5)}h ${Math.floor(nextMs%36e5/6e4)}m.</p>`;
+  $("#copy").onclick = async ()=>{ try{ await navigator.clipboard.writeText(share); $("#copy").textContent="Copied"; }catch(e){ const r=document.createRange(); r.selectNodeContents($("#shareText")); const s=getSelection(); s.removeAllRanges(); s.addRange(r); $("#copy").textContent="Selected, press copy"; } };
+}
+
+function renderLog(){
+  $("#pings").innerHTML = allPings().map(p=>{ const c=CITIES[p.c], ms=rtt(c,TARGET), b=band(ms); const win = c.i===TARGET.i;
+    return `<li class="${p.free?"free":""} ${win?"win":""}"><span class="city">${esc(c.name)}</span><span class="ms">${ms} ms</span>
+    <span class="range">${win?"Same city. That's the server.":`Server is ${fmt(b.lo)}–${fmt(b.hi)} away (light could reach ${fmt(b.limit)})`}</span></li>`; }).reverse().join("");
+  $("#pips").innerHTML = Array.from({length:MAX},(_,k)=>{ const i=S.pings[k]; return `<span class="pip ${i===undefined?"":(i===TARGET.i?"hit":"used")}"></span>`; }).join("");
+}
+
+function render(){ $("#meta").textContent = `No. ${NO} · ${new Date(EPOCH+DAY*864e5).toLocaleDateString(undefined,{month:"short",day:"numeric",timeZone:"UTC"})}`; renderSide(); renderLog(); size(); draw(); }
+render();
+{ const sc = document.getElementById("scroller"); if (sc.scrollWidth > sc.clientWidth) {
+  const ps = allPings().map(p=>CITIES[p.c]); const lon = ps.reduce((s,c)=>s+c.lon,0)/ps.length;
+  sc.scrollLeft = (lon+180)/360*sc.scrollWidth - sc.clientWidth/2; } }
+addEventListener("resize", ()=>{ size(); draw(); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+document.fonts?.ready.then(draw);
+</script>
+
+</body>
+</html>
